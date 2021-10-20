@@ -1,0 +1,578 @@
+---
+title: "Circadian Markers Across Ages in Down syndrome"
+author: "Annalysa" 
+date: "Created 3/14/2021 last modified 10/10/2021"
+output: pdf_document
+---
+Annalysa Lovos @  aklovos@email.arizona.edu
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+*** NOTE TO USER: Column numbers in the code throughout document have not yet been adjusted for the reduced, de-identified data set. If using before the author makes adjustment, please adjust for yourself the column numbers in the code you wish to use. ***
+
+Read in and summarize data:
+```{r}
+setwd("")
+# Most recent and fully compiled dataset, all 6 groups:
+Rhythms <- read.table("Circadian_Data_Share_9.10.21.xlsx", header=TRUE, sep=",")
+Rhythms <- Rhythms[c(1:102),c(1:68)] # Please check that this is the most recent vers or datasheet; I suspect no.
+
+
+require(psych)
+require(tidyverse)
+Rhythms %>% count(Group, Male.1) # to get numbers, sexes in each group
+
+describe(Rhythms[,c(5,8:27)])
+# Mean, range, skew and kurtosis table by group, for sleep data
+describeBy(Rhythms[,c(5,8:27)], Rhythms$Group, mat=TRUE, digits=3) # Add to this code to )
+# For CSHQ data:
+describeBy(Rhythms[,c(5,8,46:54)], Rhythms$Group, mat=TRUE, digits=3)
+# For Cog, Behav data:
+describeBy(Rhythms[,c(5,46)], Rhythms$Group, mat=TRUE, digits=3) # getting KBIT IQ estimates by group and age
+describe(Rhythms[c(82:91),c(1,2,5,11:24)])
+adultsleepDS_20s <- Rhythms[c(82:91),c(1,2,5,8,11:24)]
+describeBy(adultsleepDS_20s[,], adultsleepDS_20s$Male.1, mat=T, digits=3)
+```
+
+1. Dependencies
+2. Plots
+3. Descriptives on DS data (incl. boot-t-tests)
+4. ANOVA - Permutation Tests 
+5. Kruskal-Wallace Tests for the Variables with non-normal residuals
+6. Post-hoc tests to account for multiple comparisons
+7. Cognitive / Behavioural Correlations Tests
+
+1. Dependencies.
+```{r}
+require(stats)
+require(dplyr)
+require(ggplot2)
+require(ggpubr)
+library(lmPerm) # Permutation ANOVA
+library(multcomp) # Permutation ANOVA
+```
+
+2. Plots: to first have a look at some variables with ggplot 
+```{r}
+# Boxplots to show age distribution
+# REDO:
+par(mfrow=c(1,2))
+  boxplot(DS$Age.at_Acti ~ DS$Gender, main="Teens with DS", xlab="1=Boys, 2=Girls", ylab="Age")
+  boxplot(TD$Age.at_Acti ~ TD$Gender, main="TD Teens", xlab="1=Boys, 2=Girls", ylab="Age")
+
+# Trying 
+  require(tidyverse)
+# install.packages("lubridate")
+require(lubridate)
+install.packages("grid")
+require(grid)
+# install.packages("png")
+# require(png)
+# install.packages("magick") # for inserting .png images
+# require(magick)
+
+# make custom colors
+avo.colors <- c("darkgreen","darkkhaki", "darkgoldenrod4", "darkolivegreen3") # google R color library and scroll down to find the names of the colors
+
+
+```
+
+3. Descriptives
+```{r}
+describeBy() # in psych package...
+# Looking at distribution of variables by group
+DSgroup <- Rhythms[c(1:20, 41:68, 82:91),]
+TDgroup <- Rhythms[c(21:40, 69:81, 92:101),]
+# Sleep Vars
+hist(DSgroup$AvgSlpTime) # normal but a bit peaky
+hist(TDgroup$AvgSlpTime) # left skewed
+hist(DSgroup$SEavg) # normalish but a bit left skewed
+hist(TDgroup$SEavg) # left skewed; maybe should be transformed for parametric analyses
+hist(DSgroup$WASOavgmin) # normalish, slightly right-skewed
+hist(TDgroup$WASOavgmin) # normalish, slightly right-skewed
+# Phase vars
+hist(DSgroup$Onsets_avg) # normal
+hist(TDgroup$Onsets_avg) #normal-ish
+hist(DSgroup$Offsets_avg) # a bit right-skewed
+hist(TDgroup$Offsets_avg) # normal-ish
+hist(DSgroup$Acrophase) # normal-ish
+hist(TDgroup$Acrophase) # normal
+# Circadian markers
+hist(DSgroup$RA) # very left-skewed
+hist(TDgroup$RA) # very left-skewed
+hist(DSgroup$Amplitude) # peaky
+hist(TDgroup$Amplitude) # normalish
+hist(DSgroup$FFTamp) # normalish
+hist(TDgroup$FFTamp) # uniformish
+hist(DSgroup$IS) # normalish with slight left skew 
+hist(TDgroup$IS) # normalish with slight left skew 
+hist(DSgroup$IV) # slight righw skew
+hist(TDgroup$IV) # right skew
+```
+
+4. ANOVAs, Permutation type & Checking for normality: Shapiro-Wilks test
+```{r}
+################# TST, with subsetting #########################################
+Slpdata <- subset(Rhythms, select=c(Agex3, DS.TD, AvgSlpTime))
+Slpdata <- na.omit(Slpdata) 
+??aovp
+set.seed(1234)
+Slpanova.perm <- aovp(AvgSlpTime~Agex3+DS.TD+Agex3:DS.TD, data = Slpdata, perm="")
+anova(Slpanova.perm) # F=19.02, p=1.128e-07
+# Residuals - ways of looking at
+hist(residuals(Slpanova.perm)) # looks nice
+shapiro.test(residuals(Slpanova.perm)) # p=.8378 so resids are normal this is good
+ggqqplot(residuals(Slpanova.perm)) # requires ggplot2
+
+
+################################## SEavg Perm ANOVA ##########
+set.seed(1234) 
+SEdata <- subset(Rhythms, select=c(Agex3, DS.TD, SEavg, WASOavgmin))
+SEdata <- na.omit(SEdata) 
+SEanova.perm <- aovp(SEavg~Agex3+DS.TD+Agex3:DS.TD, data = SEdata, perm="")
+anova(SEanova.perm) # This code worked 
+shapiro.test(residuals(SEanova.perm)) # (normal dist of resids)
+
+### WASO (log transformed) perm anova #############
+set.seed(1234)
+WASOdata <- subset(Rhythms, select=c(Agex3, DS.TD, WASOavgmin))
+WASOdata <- na.omit(WASOdata) 
+hist(WASOdata$WASOavgmin)
+WASOdata$logWASO <- log(WASOdata$WASOavgmin)
+hist(WASOdata$logWASO)
+# now see if the logged data is resid-normal
+set.seed(1234)
+logWASOanova.perm <- aovp(logWASO~Agex3+DS.TD+Agex3:DS.TD, data = WASOdata, perm="")
+anova(logWASOanova.perm) # 
+hist(residuals(logWASOanova.perm)) # looks nice
+shapiro.test(residuals(logWASOanova.perm))
+
+##################################################################################
+# Subsetting for just clocklab data (afterwards subset for just CSHQ data)
+PhaseCirc <- subset(Rhythms, select=c(Agex3, DS.TD, Onsets_avg, Offsets_avg, Acrophase, Amplitude, L5, M10, RA, IS, IV, FFTamp, MESOR))
+PhaseCirc <- na.omit(PhaseCirc) 
+hist(PhaseCirc$Acrophase)
+PhaseCirc <- PhaseCirc[c(1:101),]
+PhaseCirc <- na.omit(PhaseCirc) 
+PhaseCirc$logAcro <- log(PhaseCirc$Acrophase)
+hist(PhaseCirc$Acrophase)
+hist(PhaseCirc$logAcro) # looks a bit better $ it appears normal now
+### t-test to see if DS shift at teenage on offsets ###################
+# data = PhaseCirc
+t.test(x=,y=,data=PhaseCirc)
+
+### Acrophase perm ANOVA #############################################
+set.seed(1234)
+AcroAnova.perm <- aovp(logAcro~Agex3+DS.TD+Agex3:DS.TD, 
+                         data = PhaseCirc, perm="", seqs=FALSE)
+anova(AcroAnova.perm) # both main effects significant; not interaction
+hist(residuals(AcroAnova.perm)) # looks norm
+shapiro.test(residuals(AcroAnova.perm)) # p=.8255 so resids are normal 
+### Onsets perm ANOVA #############################################
+set.seed(1234)
+ons.perm <- aovp(Onsets_avg~Agex3+DS.TD+Agex3:DS.TD, 
+                         data = PhaseCirc, perm="", seqs=FALSE)
+anova(ons.perm) # both main effects significant; not interaction
+hist(residuals(ons.perm)) # looks slightly skewed
+shapiro.test(residuals(ons.perm)) # p=.5466 so resids are normal
+# what if log the onsets beforehand?
+PhaseCirc$logonsets <- log(PhaseCirc$Onsets_avg)
+hist(PhaseCirc$Onsets_avg) # peaky with outlier
+hist(PhaseCirc$logonsets) # beautiful
+PhaseCirc <- na.omit(PhaseCirc) 
+PhaseCirc <- PhaseCirc[c(1:93,95:101),]
+set.seed(1234)
+ons.perm <- aovp(logonsets~Agex3+DS.TD+Agex3:DS.TD, 
+                         data = PhaseCirc, perm="", seqs=FALSE)
+anova(ons.perm) # both main effects significant; not interaction; ages p=0.0031889
+hist(residuals(ons.perm)) # looks slightly skewed
+shapiro.test(residuals(ons.perm)) # W = 0.97781, p-value = 0.08962
+# what if log the offsets beforehand?
+PhaseCirc$logoffs <- log(PhaseCirc$Offsets_avg)
+hist(PhaseCirc$Offsets_avg) # skwey with outlier
+hist(PhaseCirc$logoffs) # pretty much the same
+set.seed(1234)
+ofs.perm <- aovp(logoffs~Agex3+DS.TD+Agex3:DS.TD, 
+                         data = PhaseCirc, perm="", seqs=FALSE)
+anova(ofs.perm) # both main effects significant; not interaction; ages p=0.0031889
+hist(residuals(ofs.perm)) # looks slightly skewed
+shapiro.test(residuals(ofs.perm)) # do in Krusky tests; W = 0.87443, p-value = 1.192e-07
+
+### IS perm ANOVA #############################################
+set.seed(1234)
+IS.perm <- aovp(IS~Agex3+DS.TD+Agex3:DS.TD, 
+                data = PhaseCirc, perm="", seqs=FALSE)
+anova(IS.perm) # both main effects significant; not interaction
+hist(residuals(IS.perm)) # looks slightly skewed
+shapiro.test(residuals(IS.perm)) # p=0.9 so resids are normal 
+### IV perm ANOVA #############################################
+set.seed(1234)
+IV.perm <- aovp(IV~Agex3+DS.TD+Agex3:DS.TD, 
+                data = PhaseCirc, perm="", seqs=FALSE)
+anova(IV.perm) # both main effects significant; not interaction
+hist(residuals(IV.perm)) # looks slightly skewed
+shapiro.test(residuals(IV.perm)) # p=0.3 so resids are normal 
+ggqqplot(residuals(IV.perm)) # requires ggplot2
+### RA perm ANOVA #############################################
+set.seed(1234)
+RA.perm <- aovp(RA~Agex3+DS.TD+Agex3:DS.TD, 
+                data = PhaseCirc, perm="", seqs=FALSE)
+anova(RA.perm) # both main effects significant; not interaction
+hist(residuals(RA.perm)) # looks slightly skewed
+shapiro.test(residuals(RA.perm)) # p=0.3 so resids are normal 
+ggqqplot(residuals(RA.perm)) # requires ggplot2
+
+################################################################
+### logging the L5 and M10 #####################################
+PhaseCirc$logL5 <- log(PhaseCirc$L5)
+PhaseCirc$logM10 <- log(PhaseCirc$M10)
+### L5 perm ANOVA #############################################
+set.seed(1234)
+L5.perm <- aovp(L5~Agex3+DS.TD+Agex3:DS.TD, 
+                data = PhaseCirc, perm="", seqs=FALSE)
+anova(L5.perm) # main effect for group only; p=0.0215 *
+hist(residuals(L5.perm)) # looks slightly right skewed: I could try logging
+shapiro.test(residuals(L5.perm)) # p-value = 1.762e-05 should try logging
+ggqqplot(residuals(L5.perm)) # requires ggplot2
+#logged
+set.seed(1234)
+L5log.perm <- aovp(logL5~Agex3+DS.TD+Agex3:DS.TD, 
+                data = PhaseCirc, perm="", seqs=FALSE)
+anova(L5log.perm) # main effect for group only; p=0.003242 **
+hist(residuals(L5log.perm)) # looks slightly right skewed: I could try logging
+shapiro.test(residuals(L5log.perm)) # W = 0.98296, p-value = 0.2245
+ggqqplot(residuals(L5log.perm))
+
+### M10 perm ANOVA #############################################
+set.seed(1234)
+M10.perm <- aovp(M10~Agex3+DS.TD+Agex3:DS.TD, 
+                data = PhaseCirc, perm="", seqs=FALSE)
+anova(M10.perm) # main effect for age only: p=8.552e-16 ***
+hist(residuals(M10.perm)) # better
+shapiro.test(residuals(M10.perm)) # 1.057e-08 resids are NOT normal
+ggqqplot(residuals(M10.perm)) # requires ggplot2
+# logged
+set.seed(1234)
+M10log.perm <- aovp(logM10~Agex3+DS.TD+Agex3:DS.TD, 
+                data = PhaseCirc, perm="", seqs=FALSE)
+anova(M10log.perm) # main effect for group only; p=1.767e-15 ***
+hist(residuals(M10log.perm)) # good
+shapiro.test(residuals(M10log.perm)) # W = 0.98275, p-value = 0.2165
+ggqqplot(residuals(M10log.perm))
+
+###########################################################
+##### CSHQ ANOVAs ######################################### 
+###########################################################
+# Subsetting for just CSHQ data 
+CSHQ <- subset(Rhythms, select=c(Agex3, DS.TD, CSHQbedres, CSHQslosdel, CSHQslpDur, CSHQslanx, CSHQnwak,CSHQparas, CSHQslpdisbrth, CSHQdaytmsl, CSHQtot))
+CSHQ <- na.omit(CSHQ) 
+###  CSHQ paras perm ANOVA #############################################
+set.seed(1234)
+paras.perm <- aovp(CSHQparas~Agex3+DS.TD+Agex3:DS.TD, 
+                  data = CSHQ, perm="", seqs=FALSE)
+anova(paras.perm) # Nothing is signif
+
+hist(residuals(paras.perm)) # looks slightly skewed
+shapiro.test(residuals(paras.perm)) # p=.05 so resids are normal 
+##  CSHQ TOTAL perm ANOVA #############################################
+set.seed(1234)
+CSHQtot.perm <- aovp(CSHQtot~Agex3+DS.TD+Agex3:DS.TD, 
+                     data = CSHQ, perm="", seqs=FALSE)
+anova(CSHQtot.perm) # Only group is signif
+
+hist(residuals(CSHQtot.perm)) # looks slightly skewed
+shapiro.test(residuals(CSHQtot.perm)) # p= .02 so resids are normal enough for me
+
+
+# Or do resids like so:
+Off_res <- PhaseAnova.perm$residuals
+hist(Off_res, main = "Histogram of residuals", xlab="Residuals")
+# Leven's test for equality of variance in car pakage
+leveneTest(Offsets_avg~Agex3*DS.TD, data = PhaseCirc) # p>,05 so equal variance of the resids can be assumed
+
+```
+
+5. Kruskal-Wallace Tests for Vars w/ non-normal resids: (If the residuals are very skewed, the results of the ANOVA are less reliable.)
+```{r}
+# the following were found to have non-normal residuals so I need to do NP tests.
+### Offsets Krusky #############################################
+# Subsetting for just clocklab data 
+PhaseCirc <- subset(Rhythms, select=c(Agex3, DS.TD, Onsets_avg, Offsets_avg, Acrophase))
+PhaseCirc <- na.omit(PhaseCirc) 
+kruskal.test(Offsets_avg ~ Agex3, data = PhaseCirc) # Ages chi-sq=11.291, p=.003533; 
+kruskal.test(Offsets_avg ~ DS.TD, data = PhaseCirc)  # DS/TD chi-sq=1.58, p=.21
+# log Offsets:
+kruskal.test(logoffs ~ Agex3, data = PhaseCirc) # Ages chi-sq=11.291, p=.003533; 
+kruskal.test(logoffs ~ DS.TD, data = PhaseCirc)
+
+### Onsets Krusky #############################################
+# kruskal.test(Onsets_avg ~ Agex3, data = PhaseCirc) # chisq=5.91, p=.052
+#kruskal.test(Onsets_avg ~ DS.TD, data = PhaseCirc) # chi-sq=9.59, p=.0019
+# >>> after log-transformation onsets got normal resids
+### L5 Krusky #############################################
+CircMark <- subset(Rhythms, select=c(Agex3, DS.TD, L5, M10, RA, Amplitude, FFTamp, IS, IV, MESOR))
+CircMark <- na.omit(CircMark) 
+kruskal.test(L5 ~ Agex3, data = CircMark) # Ages not signif; 
+kruskal.test(L5 ~ DS.TD, data = CircMark) # group is with Chi-sq=12.886, p=.0003
+### M10 Krusky #############################################
+kruskal.test(M10 ~ Agex3, data = CircMark) # Ages chi-sq=55.11, p=1.079e-12
+kruskal.test(M10 ~ DS.TD, data = CircMark) # chi-sq 2.9756, p=.084
+### RA Krusky #############################################
+kruskal.test(RA ~ Agex3, data = CircMark) # Ages chi-sq=15.566, p=.0004
+kruskal.test(RA ~ DS.TD, data = CircMark) # group chi=12.003, p=.0005
+### AMPlitude Krusky #############################################
+kruskal.test(Amplitude ~ Agex3, data = CircMark) # Ages chi-sq=60.18, p=8.56e-14
+kruskal.test(Amplitude ~ DS.TD, data = CircMark) # group chi-sq 2.36, p=.124
+### FFT Krusky #############################################
+kruskal.test(FFTamp ~ Agex3, data = CircMark) # Ages chi-sq=29.104, p=4.787e-7
+kruskal.test(FFTamp ~ DS.TD, data = CircMark) # chi=6.52, p=.011
+### MESOR Krusky #############################################
+kruskal.test(MESOR ~ Agex3, data = CircMark) # Ages chi-sq=47.255, p=5.48e-11
+kruskal.test(MESOR ~ DS.TD, data = CircMark) # chi=3.348, p=.0673
+
+###########################################################
+##### CSHQ Kruskal-Wallis Tests ######################################### 
+###########################################################
+# Subsetting for just CSHQ data 
+CSHQ <- subset(Rhythms, select=c(Agex3, DS.TD, CSHQbedres, CSHQslosdel, CSHQslpDur, CSHQslanx, CSHQnwak, CSHQparas, CSHQslpdisbrth, CSHQdaytmsl, CSHQtot))
+CSHQ <- na.omit(CSHQ) 
+###  Bedtime Resistance #############################################
+kruskal.test(CSHQbedres ~ Agex3, data = CSHQ) # Ages chi-sq=15.75, p=.00038
+kruskal.test(CSHQbedres ~ DS.TD, data = CSHQ) # group chi=9.36, p=.0022
+###  Sleep Onset Delay  #############################################
+kruskal.test(CSHQslosdel ~ Agex3, data = CSHQ) # Ages chi-sq=1.76, p=.414
+kruskal.test(CSHQslosdel ~ DS.TD, data = CSHQ) # grp chi=.885, p=.347
+###  CSHQ Sleep Duration  #############################################
+kruskal.test(CSHQslpDur ~ Agex3, data = CSHQ) # Ages chi-sq=19.635, p=5.449e-05
+kruskal.test(CSHQslpDur ~ DS.TD, data = CSHQ) # grp chi=7.09, p=.008
+###  CSHQ Sleep Anxiety  #############################################
+kruskal.test(CSHQslanx ~ Agex3, data = CSHQ) # Ages chi-sq=1.1, p=.58
+kruskal.test(CSHQslanx ~ DS.TD, data = CSHQ) # grp chi=7.18, p=.007
+###  CSHQ Night Wakings #############################################
+kruskal.test(CSHQnwak ~ Agex3, data = CSHQ) # Ages chi-sq=10.78, p=.005
+kruskal.test(CSHQnwak ~ DS.TD, data = CSHQ) # grp chi=.004, p=1.94
+###  CSHQ slpdisbrth  #############################################
+kruskal.test(CSHQslpdisbrth ~ Agex3, data = CSHQ) # Ages chi-sq=.16, p=.92
+kruskal.test(CSHQslpdisbrth ~ DS.TD, data = CSHQ) # grp chi=14.396, p=.00015
+###  CSHQ Daytime Sleepiness #############################################
+kruskal.test(CSHQdaytmsl ~ Agex3, data = CSHQ) # Ages chi-sq=6.83, p=.033
+kruskal.test(CSHQdaytmsl ~ DS.TD, data = CSHQ) # grp chi=4.88, p=.027
+###  CSHQ Tot #############################################
+kruskal.test(CSHQtot ~ Agex3, data = CSHQ) # Ages chi-sq=6.83, p=.033
+kruskal.test(CSHQtot ~ DS.TD, data = CSHQ) # grp chi=4.88, p=.027
+
+```
+
+6. Post-Hoc correction: Holm
+```{r}
+###############################################################
+### Holm family-wise error adjustment: #############################################################
+require(stats) # both tukey and BH are in this
+??p.adjust() # p.adjust(p, method = p.adjust.methods, n = length(p))
+p=c(.0000001128, 0.1173, 0.004, 0.05218, 0.0035, 2.631e-05, 5.568e-07, 4.564e-06, 8.56e-14, 5.48e-11, .0004, .414, 5.449e-05, 0.58, .005, .14, .92, .033, .033)
+p.adjust(p, method="holm", n=19) # See output saved below this block and see also # Notes app
+# re-ran on 6/7/21:
+p=c(1.128e-07, 0.1173, 0.004169, 0.0038064, 6.275e-05, 0.0003301, 1.324e-06, 2.444e-06, 0.0004168, 4.787e-07, 0.0003794, 0.4143, 5.449e-05, 0.5766, 0.004567, 0.1398, 0.9232, 0.03289, 0.867561)
+p.adjust(p, method="holm", n=19) # See output saved below this block and see also Notes app
+# 6/7/21 for Group & interaction value (offsets) at end:
+p2=c(0.8098, 2.937e-06, 1.629e-08, 0.0002077, 0.01764, 0.0003101, 0.002664, 0.0679, 0.0005312, 0.01069, 0.002212, .3467, 0.007748, 0.007388, 0.9491, .1384, 0.0001482, .02722, 0.001406, 0.0054149, 0.03634)
+p.adjust(p2, method="holm", n=21) # See output saved below this block and see also Notes app
+
+# New run to include L5 and M10 rather than RA so 22? to correct, 7/14/21
+
+# p3=c(TST.age, SE.grp, logWASO.age, logWASO.group, logAcro.age, logAcro.grp, logAcro.intxn, logOnsets.age, logOnsets.grp, IS.age, IS.grp, IV.age, L5log.age, CSHQtot.grp, Offsets.age, FFT.age, FFT.grp, CSHQbedres.Age, CSHQbedres.grp, CSHQslpdur.age, CSHQslpdur.grp, CSHQ.splanx.grp, CSHQnwak.age, CSHQslpdisbrth.grp, CSHQdytmslp.age)
+
+p3=c(1.128e-07, 2.937e-06, 0.004169, 1.629e-08, 5.57e-07, 0.0003301, 0.0058195, 0.0038064, 0.0002077, 1.324e-06, 0.002664, 2.444e-06, 0.005011, 0.001406, 0.0003301, 4.787e-07, 0.01069, 0.0003794, 0.002212, 5.449e-05, 0.007748, 0.007388, 0.004567, 0.0001482, 0.03289, 1.767e-15)
+p.adjust(p3, method="holm", n=26) # See output saved below this block and see also Notes app
+
+```
+Holm-adjusted p's for age: 
+p.adjust(p, method="holm", n=19)
+ [1] 2.1432e-06 8.2110e-01 3.8064e-02 3.8064e-02 8.7850e-04 4.2913e-03 2.2508e-05
+ [8] 3.9104e-05 4.5848e-03 8.6166e-06 4.5528e-03 1.0000e+00 8.1735e-04 1.0000e+00
+[15] 3.8064e-02 8.3880e-01 1.0000e+00 1.0000e+00
+
+Holm-adjusted p for group; acro & offsets interaction terms at end
+> p.adjust(p2, method="holm", n=21) # See output saved below this block and see also Notes app
+ [1] 1.00000e+00 5.87400e-05 3.42090e-07 3.73860e-03 1.41120e-01 5.27170e-03
+ [7] 3.46320e-02 3.39500e-01 8.49920e-03 9.62100e-02 3.09680e-02 1.00000e+00
+[13] 8.12680e-02 8.12680e-02 1.00000e+00 5.53600e-01 2.81580e-03 1.90540e-01
+[19] 2.10900e-02 6.49788e-02 2.18040e-01
+
+7/14 Holm correction results, includeing L5 and M10
+ [1] 2.70720e-06 5.58030e-05 3.42576e-02 4.07250e-07 1.22540e-05 4.95150e-03 3.42576e-02
+ [8] 3.42576e-02 3.32320e-03 2.78040e-05 2.66400e-02 4.88800e-05 3.42576e-02 1.68720e-02
+[15] 4.95150e-03 1.10101e-05 3.42576e-02 4.95150e-03 2.43320e-02 9.80820e-04 3.42576e-02
+[22] 3.42576e-02 3.42576e-02 2.51940e-03 3.42576e-02
+
+6. Correlations with Cognitive and Behavioral Data
+```{r}
+# Cognitive
+library(psych)
+#####################################
+### Linear Model: ph 07 List Learning / Verbal Mem
+####################################
+cog3 <- cogent[,c(2:6,10)]
+cog3 <- na.omit(cog3) # 33 obs
+
+mod3.1 <- lm(AMAP_07_LLCorrect ~ IS + SEavg + Age_Acti + Male.1, data=cog3) # 
+summary(mod3.1) # IS p=4.47e-05; SE p=0.000231; Age p=.043; mult r2=.6145
+# wait now I get IS p=/00274, mult r2=.3943, 33 obs on 7/9/21? use these vals # continue getting these
+plot(mod3.1)
+### Compare to model with partial days of weekend acti removed # USE THIS
+cog3.2 <- cogsds[,c(4:6,8,11,19,24,50)]
+cog3.2 <- subset(cog3.2, WeekendDays > 1.0)
+cog3.2 <- na.omit(cog3.2) # 26 obs
+mod3.2 <- lm(cog3.2$AMAP_07_LLCorrect ~ cog3.2$IS + cog3.2$SEavg + cog3.2$Age_Acti +  cog3.2$Male.1)
+summary(mod3.2) # IS p=.0015, nothing else signif; mult R2=.5673 26 obs !!! USE THIS!!!
+# IS has NEGATIVE correlation with phase 07.  ??? 
+
+######################################
+### Linear Model: ph 08 Spatial Mem ###
+#####################################
+cog4.1 <- cogsds[,c(5,6,8,11,19,24,51)] # USE THIS NO GRPAPHS NO SIG
+cog4.1 <- na.omit(cog4.1)
+cog4.1 <- subset(cog4.1, WeekendDays > 1.0) # Tried both covarying for full Weekend days and this; they produce exactly the same
+cog4.1 <- subset(cog4.1, SEavg>73) # RM ing outlier
+mod4.1 <- lm(cog4.1$AMAP_08_SpatialTot ~ cog4.1$IS + cog4.1$SEavg + cog4.1$Age_Acti + cog4.1$Male.1)
+summary(mod4.1) # USE THIS
+# Here nothing is significant anymore, IS p=.1104; age p=.0803, Se p=.7011; mult r2=0.4064; 30 obs
+
+######################################
+### Linear Model: ph 10 Object-Context ###
+#####################################
+cog5 <- cogent[,c(2:6,13)]
+cog5$logph10 <- log(cog5$AMAP_10_OIC1_Score)
+cog5[cog5 == "-Inf"] <- 0 # worked
+cog5 <- na.omit(cog5) # 54 obs
+?hist()
+par(mfrow=c(1,2))
+hist(cog5$IS, cog5$AMAP_10_OIC1_Score, ylim=c(0,25)) # Error in plot.window(xlim, ylim, "", ...) : need finite 'ylim' values
+hist(cog5$pIS, cog5$logph10, ylim=c(0,4)) # ERROR IN ... X must be numeric
+pairs.panels(cog5) # firckin worked ok run cog mod to comapre
+mod5log <- lm(logph10 ~ IS + SEavg + Age_Acti + Male.1, data=cog5) # USE THIS
+summary(mod5log) # only age signif at p=0.00332 **, multr2= .3827
+
+###############################
+### Linear Model: ph 09 Immed Scene Recall
+###############################
+cog7.2 <- cogsds[,c(5,6,8,11,19,24,52)]
+cog7.2 <- na.omit(cog7.2) # 39 obs
+cog7.2 <- subset(cog7.2, SEavg>73) #  30 obs now run the above again
+cog7.2 <- subset(cog7.2, WeekendDays > 1.0) # 30 obs
+mod7.2 <- lm(AMAP_09_SceneRecScore ~ IS + SEavg + Age_Acti + Male.1, data=cog7.2) # USE THIS
+summary(mod7.2) # IS p=0.00528 **; multr2=.4294 with 1 outlier removed #############N   USE THIS
+# no graphs
+
+####################################
+### Linear Model: ph 05 Immediate Visual Recall
+#####################################
+# with only full weekend participants
+cog6.2 <- cogsds[,c(5,6,8,11,19,24,49)]
+cog6.2 <- na.omit(cog6.2)
+cog6.2 <- subset(cog6.2, WeekendDays > 1.0)
+mod6.2 <- lm(AMAP_05_scenes ~ IS + SEavg + Age_Acti + Male.1, data=cog6.2) # USE THIS
+summary(mod6.2) # NO SIGNIF MAIN EFFECTS OR INTERACTIONS LEFT, IS p=.0887 MULTR2=.2647, 41 obs
+# no graphs
+mod6.3 <- lm(AMAP_05_scenes ~ IS + SEavg + Age_Acti + Male.1 + IS:Age_Acti, data=cog6.2) # USE THIS
+summary(mod6.3)
+or 
+#Compare to sqrt transformed outome:
+cogent$sqrtAMAP05 <- sqrt(cogent$AMAP_05_scenes)
+pairs.panels(cogent[,c(4:15,6)])
+# SQRT-transformed with only full weekend participants
+cog6.3 <- cogent[,c(2:6,16)]
+cog6.3$WeekendDays <- cogsds$WeekendDays
+cog6.3 <- na.omit(cog6.3)
+cog6.3 <- subset(cog6.3, WeekendDays > 1.0) # 45 obs
+mod6.3 <- lm(sqrtAMAP05 ~ IS + SEavg + Age_Acti + Male.1, data=cog6.3) # USE THIS LOGGED to report
+summary(mod6.3) # nothing signif, ISp=.0817; mult r2=0.2555
+
+####################################
+### Does KBIT predict rxn time
+###################################
+cogskbitef <- cogsds[,c(1,5,6,8,11,19,24,29,43:52,55,65,68)]
+cog1.2 <- cogskbitef[,c(2:7,9,11,20,21)] 
+cog1.2 <- na.omit(cog1.2) # down to 41 obs
+cog1.2 <- subset(cog1.2, Efalt_Avg_Time<5) # rm 2 outliers on ph12 now 39 obs
+cog1.2 <- na.omit(cog1.2) # 37
+# the model
+mod1.2 <- lm(KBITverbRaw ~ IS + SEavg + 
+               Age_Acti + Male.1, data=cog1.2)
+summary(mod1.2)
+```
+From the publisher:
+For all BRIEF2 clinical scales and indexes, T scores from 60 to 64 are considered mildly elevated, and T scores from 65 to 69 are considered potentially clinically elevated. T scores at or above 70 are considered clinically elevated.
+```{r}
+# Behavioral
+### BRIEF
+# Try with rm partial weekend data folks: ***********REPORT THIS*****************
+cog2 <- cogent[,c(2:7)]
+cog2$WeekendDays <- cogsds$WeekendDays
+cog2 <- subset(cog2, WeekendDays>1.0) # went from 58 to 46 obs
+cog2 <- na.omit(cog2) # went to 40 obs
+mod2.2 <- lm(cog2$BRIEFgec.T. ~ cog2$IS + cog2$SEavg + cog2$Age_Acti + cog2$Male.1) # 
+summary(mod2.2) # Still nothing significant all p>.05, Multiple R-squared:
+
+###### Linear Model: Exec Fxn Alternating Trials Response time task #####
+########################### Model bef added EFalt # correct ########################
+cog1 <- cogent[,c(2:6,14)] 
+cog1 <- na.omit(cog1)
+### Ph 12 Rxn Time
+cog1.02 <- cogsds[,c(4:6,8,11,19,24,68)]
+cog1.02 <- subset(cog1.02, WeekendDays > 1.0)
+cog1.02 <- subset(cog1.02, Efalt_Avg_Time<5) # rm 2 outliers on ph12
+cog1.02 <- na.omit(cog1.02) # 41 obs
+mod1.02 <- lm(cog1.02$Efalt_Avg_Time ~ cog1.02$IS + cog1.02$SEavg + 
+                cog1.02$Age_Acti +  cog1.02$Male.1 + cog1.02$IS:cog1.02$Age_Acti)
+summary(mod1.02)  ##### WINNER AFTER RM 2 OUTLIERS 
+#40 obs; IS p=0.000268 *** age p=0.005457 ** , intxn p=0.003894 **; mult r2=0.4256;  #USE THIS !!!!!!!! *********************************************  #USE THIS !!!!!!!! *********************************************
+
+### with EFalt performance as a covariate # USE AND REPORT THIS ONE ! ### 
+cogskbitef <- cogsds[,c(1,5,6,8,11,19,24,29,43:52,55,65,68)]
+cog1.1 <- cogskbitef[,c(2:7,11,20,21)] 
+cog1.1 <- na.omit(cog1.1) # down to 39 obs
+cog1.1 <- subset(cog1.1, Efalt_Avg_Time<5) # rm 2 outliers on ph12 now 39 obs
+cog1.1 <- na.omit(cog1.1) # 
+mod1.1 <- lm(Efalt_Avg_Time ~ IS + SEavg + 
+               Age_Acti + Male.1 + AMAP_12_Efalt + IS:Age_Acti, data=cog1.1)
+summary(mod1.1)
+
+```
+
+
+```{r}
+# Corrections for all the signif values:
+# RxnTm ~ IS p= 0.000268 > 0.002144  replace with IS p = 0.00224 > 0.01120
+      # ~ Age p= 0.005457 > 0.013280 replace with Age p = 0.03137 > 0.04318
+      # ~ Intxn p= 0.003894 > 0.013280 replace with Intxn p = 0.02159 > 0.04318
+# AMAP 07 ~ IS p=0.0015 > 0.007500
+# AMAP 10 ~ Age p=0.00332 > 0.013280
+# AMAP 09 ~ IS p=0.00528 >
+p=c(0.00224, 0.03137, 0.02159, 0.0015, 0.00332, 0.00528)
+p.adjust(p, method="holm", n=6)
+# = [1] 0.001608 0.013280 0.013280 0.007500 0.013280 0.013280 # re-ran 7/13/21
+# [1] 0.01120 0.04318 0.04318 0.00900 0.01328 0.01584 # With adjusted rxntm model 8/1/21
+# t-test for DS teen offsets vs kid offsets to look for pahse diff
+Rhythms <- read.csv("All_Rhythms_Compiled_5.24.21_AKL.csv", header=TRUE, sep=",")
+Rhythms <- Rhythms[c(1:102),c(1:68)] # Please check that this is the most recent vers or datasheet; I suspect no.
+# Subsetting for just clocklab data (afterwards subset for just CSHQ data)
+PhaseCirc <- subset(Rhythms, select=c(Agex3, DS.TD, Onsets_avg, Offsets_avg, Acrophase, Amplitude, L5, M10, RA, IS, IV, FFTamp, MESOR))
+PhaseCirc <- na.omit(PhaseCirc) 
+hist(PhaseCirc$Acrophase)
+PhaseCirc <- PhaseCirc[c(1:101),]
+PhaseCirc <- na.omit(PhaseCirc) 
+?t.test()
+# make x and y into vectors:
+?subset()
+kidsoff <- subset(PhaseCirc, Agex3=="Kids", select=c(Agex3, Onsets_avg, Offsets_avg, Acrophase))
+dskidsoff <- subset(PhaseCirc, DS.TD=="DS", select=c(Agex3, Onsets_avg, Offsets_avg, Acrophase))
+dskidsoff <- na.omit(dskidsoff)
+teensoff <- subset(PhaseCirc, Agex3=="Teens",select=c(Agex3, Onsets_avg, Offsets_avg, Acrophase))
+dsteensoff <- subset(PhaseCirc, DS.TD=="DS", select=c(Agex3, Onsets_avg, Offsets_avg, Acrophase))
+dsteensoff <- na.omit(dsteensoff)
+summary(kidsoff)
+t.test(x=dskidsoff$Offsets_avg, y=dsteensoff$Offsets_avg)
+```
+
